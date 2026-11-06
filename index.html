@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EquiCheck | Equipment Monitoring & Damage Reporting</title>
+  <link rel="stylesheet" href="Design.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="app-header" id="appHeader">
+    <button class="nav-back-btn" id="globalBackBtn" type="button">&laquo; GO BACK</button>
+    <div class="header-title" id="headerTitle">EquiCheck</div>
+    <div class="header-brand">
+      <span class="brand-text">EquiCheck</span>
+      <div class="brand-badge">{&check;}</div>
+    </div>
+  </header>
+
+  <main class="app-container">
+
+    <!-- 1. SPLASH SCREEN (3 MODULES) -->
+    <section class="view active" id="view-splash">
+      <div class="splash-card">
+        <div class="splash-logo-container">
+          <div class="monitor-frame">
+            <span class="monitor-icon">{&check;}</span>
+          </div>
+        </div>
+        <h1 class="logo-title">EquiCheck</h1>
+        <p class="tagline">
+          Digitizing Classroom Maintenance through Web-Based Laboratory Room and Equipment Monitoring and Damage Reporting System
+        </p>
+        <p class="meta-authors">BSIT Group 6 &bull; TSU-CCS San Isidro Campus</p>
+        
+        <div class="splash-actions three-btns">
+          <button class="btn btn-secondary splash-role-btn" id="btnGoInstructor" type="button">INSTRUCTOR</button>
+          <button class="btn btn-secondary splash-role-btn" id="btnGoCustodian" type="button">PROPERTY CUSTODIAN</button>
+          <button class="btn btn-primary splash-role-btn" id="btnGoStudent" type="button">STUDENT</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. STUDENT: EVALUATOR'S DETAILS -->
+    <section class="view" id="view-evaluator-details">
+      <div class="selection-heading">
+        <h2>Hello, dear student, welcome to EquiCheck!</h2>
+      </div>
+      <div class="terminal-panel">
+        <h2 class="panel-header details-form-title">CONDITION MONITORING FORM &bull; EVALUATOR'S DETAILS</h2>
+        <form id="formEvaluatorDetails" class="form-grid">
+          <div class="form-group">
+            <label for="studentNo">Student Number</label>
+            <input type="text" id="studentNo" placeholder="e.g. 2024101234" required />
+          </div>
+          <div class="form-group">
+            <label for="studentName">Student Name</label>
+            <input type="text" id="studentName" placeholder="e.g. Palad, Franzen R." required />
+          </div>
+          <div class="form-group">
+            <label for="section">Section</label>
+            <select id="section" required>
+              <option value="BSIT-2A">BSIT-2A</option>
+              <option value="WMA-3A">WMA-3A</option>
+              <option value="TSM-3A">TSM-3A</option>
+              <option value="CS-4C">CS-4C</option>
+              <option value="IS-4A">IS-4A</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="evalDate">Date</label>
+            <input type="date" id="evalDate" required />
+          </div>
+          <div class="form-group">
+            <label for="classSchedule">Course Schedule</label>
+            <input type="text" id="classSchedule" placeholder="e.g. 10:30 AM - 1:30 PM" required />
+          </div>
+          <div class="form-group">
+            <label for="instructorSelect">Instructor</label>
+            <select id="instructorSelect" required>
+              <option value="John Cedric G. Asprer">John Cedric G. Asprer</option>
+              <option value="Engr. Marlon V. Gamido">Engr. Marlon V. Gamido</option>
+              <option value="Dr. Heidilyn V. Gamido">Dr. Heidilyn V. Gamido</option>
+              <option value="Prof. Theda Flare G. Quilala">Prof. Theda Flare G. Quilala</option>
+            </select>
+          </div>
+          <div class="form-actions full-width">
+            <button class="btn btn-primary" type="submit">PROCEED &raquo;</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 3. STUDENT: ROOM SELECTION (Color-Coded Status) -->
+    <section class="view" id="view-room-selection">
+      <div class="selection-heading">
+        <h2>Please choose your assigned laboratory room</h2>
+        <div class="room-status-legend">
+          <span><span class="legend-box available"></span> AVAILABLE ROOM</span>
+          <span><span class="legend-box maintenance"></span> BEING FIXED</span>
+          <span><span class="legend-box updating"></span> BEING UPDATED</span>
+        </div>
+      </div>
+      <div class="room-board" id="roomGridContainer"></div>
+    </section>
+
+    <!-- 4. STUDENT: PC / SEAT SELECTION -->
+   
+    <section class="view" id="view-pc-selection">
+      <div class="selection-heading">
+        <h2 id="pcSelectionHeading">WHERE DO YOU SEAT? PLEASE CHOOSE YOUR PC</h2>
+        <p class="legend-note">
+          <span class="legend-dot green"></span> Functional 
+          <span class="legend-dot yellow"></span> Semi-Working 
+          <span class="legend-dot red"></span> Unusable
+        </p>
+      </div>
+
+      <div class="lab-layout-wrapper">
+        <div class="instructor-podium">WHITEBOARD / TEACHER'S PODIUM</div>
+        
+        <div class="classroom-layout-container">
+          <div class="seat-col left-col">
+            <span class="col-title">Left (4)</span>
+            <div class="col-seats-grid" id="seatsLeftCol"></div>
+          </div>
+
+          <div class="seat-center-section">
+            <span class="col-title">3 Center Rows (8 PCs each)</span>
+            <div class="center-rows-grid" id="seatsCenterGrid"></div>
+          </div>
+
+          <div class="seat-col right-col">
+            <span class="col-title">Right (4)</span>
+            <div class="col-seats-grid" id="seatsRightCol"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. STUDENT: PERIPHERAL SELECTION HUB -->
+    <section class="view" id="view-peripheral-selection">
+      <div class="selection-heading">
+        <h2 id="peripheralHubTitle">PC 01: CLICK THE PERIPHERAL'S IMAGE TO EVALUATE</h2>
+        <p>CONDITION MONITORING FORM</p>
+      </div>
+
+      <div class="peripherals-grid" id="peripheralsHubGrid"></div>
+
+      <div class="hub-footer-actions">
+        <button class="btn btn-primary" id="btnFinishInspection" type="button">VIEW SUMMARY &amp; SUBMIT &raquo;</button>
+      </div>
+    </section>
+
+    <!-- 6. STUDENT: CONDITION MONITORING FORM (SPLIT VIEW) -->
+    <section class="view" id="view-condition-form">
+      <div class="monitoring-layout">
+        
+        <!-- Left: Active Peripheral Card -->
+        <div class="card-eval-form">
+          <div class="eval-header">
+            <span class="eval-target-badge" id="evalCurrentPcBadge">PC 01</span>
+            <div>
+              <h3 id="evalCurrentPeripheralName">MONITOR</h3>
+              <small class="sub-muted">Peripheral Evaluation Card</small>
+            </div>
+          </div>
+
+          <div class="eval-body">
+            <div class="eval-icon-preview" id="evalIconPreview"></div>
+
+            <div class="field-block">
+              <label class="field-title">AVAILABILITY</label>
+              <div class="radio-inline-group" id="availabilityOptions">
+                <label><input type="radio" name="availability" value="Yes" checked> Yes</label>
+                <label><input type="radio" name="availability" value="No"> No</label>
+                <label><input type="radio" name="availability" value="Not Available"> Not Available</label>
+              </div>
+            </div>
+
+            <div class="field-block" id="ratingBlock">
+              <label class="field-title">CONDITION RATING (1-5)</label>
+              <div class="star-rating" id="starRatingContainer">
+                <span class="star active" data-value="1">&#9733;</span>
+                <span class="star active" data-value="2">&#9733;</span>
+                <span class="star active" data-value="3">&#9733;</span>
+                <span class="star active" data-value="4">&#9733;</span>
+                <span class="star active" data-value="5">&#9733;</span>
+              </div>
+              <span class="rating-label" id="ratingLabel">5 / 5 - Excellent</span>
+            </div>
+
+            <div class="field-block" id="issuesBlock">
+              <label class="field-title">FLAG ISSUES</label>
+              <div class="checkbox-group" id="issuesChecklistContainer"></div>
+              <div class="other-issue-box">
+                <label class="field-title">SPECIFY OTHER CONCERN:</label>
+                <input type="text" id="customIssueInput" placeholder="Details of other issues..." />
+              </div>
+            </div>
+
+            <!-- Evidence Attachment -->
+            <div class="field-block" id="photoCaptureBlock">
+              <label class="field-title">EVIDENCE</label>
+              <div class="photo-controls">
+                <input type="file" id="cameraInput" accept="image/*" style="display:none;" />
+                <button class="btn btn-secondary btn-sm" id="btnTriggerCamera" type="button">ATTACH IMAGE FILE</button>
+                <button class="btn btn-secondary btn-sm" id="btnRemovePhoto" type="button" style="display:none; color:var(--color-red);">REMOVE</button>
+              </div>
+              <div id="photoPreviewContainer">
+                <img id="photoPreviewImg" src="" alt="Captured evidence" />
+              </div>
+            </div>
+
+            <div class="eval-actions">
+              <button class="btn btn-secondary" id="btnResetPeripheral" type="button">RESET</button>
+              <button class="btn btn-primary" id="btnSavePeripheral" type="button">SAVE</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Overview Table with Evidence Column -->
+        <div class="card-eval-summary">
+          <h3 class="panel-header" id="overviewHeaderTitle">PC 01 Evaluation Overview</h3>
+          <p class="sub-hint">Click any row to evaluate or update that peripheral</p>
+          
+          <table class="retro-table" id="inlineOverviewTable">
+            <thead>
+              <tr>
+                <th>EQUIPMENT</th>
+                <th>AVAILABILITY</th>
+                <th>CONDITION</th>
+                <th>ISSUE(S) RAISED</th>
+                <th>IMAGE EVIDENCE</th>
+              </tr>
+            </thead>
+            <tbody id="inlineOverviewTableBody"></tbody>
+          </table>
+
+          <div class="overview-footer">
+            <button class="btn btn-secondary" id="btnBackToHub" type="button">BACK TO ICONS</button>
+            <button class="btn btn-primary" id="btnReviewAllFromForm" type="button">REVIEW REPORT &raquo;</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 7. STUDENT: REPORT SUMMARY SHEET -->
+    <section class="view" id="view-report-summary">
+      <div class="summary-container">
+        <h2 class="panel-header text-center">REPORT SUMMARY SHEET</h2>
+        
+        <div class="summary-columns">
+          <div class="summary-table-wrap">
+            <table class="retro-table" id="finalSummaryTable">
+              <thead>
+                <tr>
+                  <th>EQUIPMENT</th>
+                  <th>AVAILABILITY</th>
+                  <th>CONDITION STATUS</th>
+                  <th>ISSUE(S) RAISED</th>
+                  <th>IMAGE EVIDENCE</th>
+                </tr>
+              </thead>
+              <tbody id="finalSummaryTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="summary-meta-wrap">
+            <div class="meta-box" id="summaryMetaDisplay"></div>
+
+            <div class="pledge-card">
+              <label class="pledge-label">
+                <input type="checkbox" id="pledgeCheckbox" />
+                <span>
+                  I hereby confirm that I have answered this form completely &amp; truthfully.
+                  <br><em>(Student's Signature over Printed Name)</em>
+                </span>
+              </label>
+            </div>
+
+            <div class="summary-actions">
+              <button class="btn btn-secondary" id="btnEditEvaluation" type="button">EDIT</button>
+              <button class="btn btn-primary" id="btnSubmitFinalReport" type="button" disabled>SUBMIT &amp; SAVE</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. INSTRUCTOR: LOGIN -->
+    <section class="view" id="view-instructor-login">
+      <div class="terminal-panel auth-panel">
+        <h2 class="panel-header">INSTRUCTOR MODULE &bull; ACCOUNT LOGIN</h2>
+        <p class="auth-subtext">Please enter your credentials.</p>
+        
+        <form id="formInstructorLogin">
+          <div class="form-group">
+            <label for="loginEmail">Email</label>
+            <input type="email" id="loginEmail" placeholder="jc.asprer@tsu.edu.ph" required />
+          </div>
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" placeholder="••••••••" required />
+          </div>
+          <p class="demo-credential-tip">Demo: <code>admin@tsu.edu.ph</code> / <code>admin123</code></p>
+          <div class="form-actions">
+            <button class="btn btn-primary full-width" type="submit">LOG IN &raquo;</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 9. INSTRUCTOR: DASHBOARD (Verification of Students' Report) -->
+    <section class="view" id="view-instructor-dashboard">
+      <div class="dashboard-layout">
+        <aside class="dash-sidebar">
+          <h3 class="dash-brand">DASHBOARD</h3>
+          
+          <div class="sidebar-block">
+            <span class="block-title">TAGGED SECTIONS</span>
+            <ul class="room-filter-list" id="instructorSectionFilterList">
+              <li class="active" data-section="ALL">ALL SECTIONS</li>
+              <li data-section="BSIT-2A">BSIT-2A</li>
+              <li data-section="WMA-3A">WMA-3A</li>
+              <li data-section="TSM-3A">TSM-3A</li>
+              <li data-section="CS-4C">CS-4C</li>
+              <li data-section="IS-4A">IS-4A</li>
+            </ul>
+          </div>
+
+          <div class="sidebar-bottom-actions">
+            <button class="sidebar-action-btn" id="btnDashAccount" type="button">&bull; ACCOUNT SETTING</button>
+            <button class="sidebar-action-btn" id="btnDashLogout" type="button">&bull; LOG OUT</button>
+          </div>
+        </aside>
+
+        <div class="dash-content">
+          <div class="dash-header">
+            <div>
+              <h2>Hi, Ma'am/Sir</h2>
+              <p class="sub-muted">Verification of Students' Report Summary Sheet</p>
+            </div>
+            <span class="dash-campus-badge">INSTRUCTOR MODULE</span>
+          </div>
+
+          <div class="dash-table-card">
+            <div class="table-scroll-wrap">
+              <table class="retro-table" id="instructorReportTable">
+                <thead>
+                  <tr>
+                    <th>PC STATUS</th>
+                    <th>ROOM NO.</th>
+                    <th>PC NO.</th>
+                    <th>STUDENT NO.</th>
+                    <th>VIEW</th>
+                    <th>VERIFICATION STATUS</th>
+                  </tr>
+                </thead>
+                <tbody id="instructorReportTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. PROPERTY CUSTODIAN: LOGIN -->
+    <section class="view" id="view-custodian-login">
+      <div class="terminal-panel auth-panel">
+        <h2 class="panel-header">PROPERTY CUSTODIAN MODULE &bull; ACCOUNT LOGIN</h2>
+        <p class="auth-subtext">Please enter your credentials.</p>
+        
+        <form id="formCustodianLogin">
+          <div class="form-group">
+            <label for="custodianEmail">Email</label>
+            <input type="email" id="custodianEmail" placeholder="custodian@tsu.edu.ph" required />
+          </div>
+          <div class="form-group">
+            <label for="custodianPassword">Password</label>
+            <input type="password" id="custodianPassword" placeholder="••••••••" required />
+          </div>
+          <p class="demo-credential-tip">Demo: <code>custodian@tsu.edu.ph</code> / <code>custodian123</code></p>
+          <div class="form-actions">
+            <button class="btn btn-primary full-width" type="submit">LOG IN &raquo;</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 11. PROPERTY CUSTODIAN: DASHBOARD -->
+    <section class="view" id="view-custodian-dashboard">
+      <div class="dashboard-layout">
+        <aside class="dash-sidebar">
+          <h3 class="dash-brand">DASHBOARD</h3>
+          
+          <div class="sidebar-block">
+            <button class="btn btn-primary btn-sm full-width active-tab-btn sidebar-tab-btn" id="btnCustTabReports" type="button">REPORT HISTORY</button>
+          </div>
+
+          <div class="sidebar-block" id="custRoomFilterWrapper">
+            <span class="block-title">REPORT HISTORY OF ROOM</span>
+            <ul class="room-filter-list" id="custodianRoomFilterList">
+              <li class="active" data-room="ALL">All rooms</li>
+              <li data-room="C401">C401</li>
+              <li data-room="C402">C402</li>
+              <li data-room="C403">C403</li>
+              <li data-room="C404">C404</li>
+              <li data-room="C405">C405</li>
+              <li data-room="R421">R421</li>
+              <li data-room="R422">R422</li>
+              <li data-room="L501">L501</li>
+              <li data-room="R501">R501</li>
+            </ul>
+          </div>
+
+          <div class="sidebar-bottom-actions">
+            <button class="btn btn-secondary btn-sm full-width sidebar-tab-btn" id="btnCustTabRooms" style="margin-bottom:10px;" type="button">MANAGE LAB ROOM AVAILABILITY</button>
+            <button class="sidebar-action-btn" id="btnCustAccount" type="button">&bull; ACCOUNT SETTING</button>
+            <button class="sidebar-action-btn" id="btnCustLogout" type="button">&bull; LOG OUT</button>
+          </div>
+        </aside>
+
+        <div class="dash-content">
+          <div class="dash-header">
+            <div>
+              <h2>Hi, Ma'am/Sir</h2>
+              <p class="sub-muted">TSU-CCS Laboratory Equipment Damage &amp; Room Monitoring</p>
+            </div>
+            <span class="dash-campus-badge">PROPERTY CUSTODIAN</span>
+          </div>
+
+          <!-- KPI Counters -->
+          <div class="kpi-grid" id="custKpiGrid">
+            <div class="kpi-card card-green">
+              <div class="kpi-number" id="custCountFunctional">0</div>
+              <div class="kpi-desc">Functional</div>
+            </div>
+            <div class="kpi-card card-yellow">
+              <div class="kpi-number" id="custCountSemi">0</div>
+              <div class="kpi-desc">Semi-Working</div>
+            </div>
+            <div class="kpi-card card-red">
+              <div class="kpi-number" id="custCountUnusable">0</div>
+              <div class="kpi-desc">Unusable</div>
+            </div>
+            <div class="kpi-card card-cyan">
+              <div class="kpi-number" id="custCountTotal">0</div>
+              <div class="kpi-desc">Total logged</div>
+            </div>
+          </div>
+
+          <!-- Custodian Reports Table -->
+          <div class="dash-table-card" id="custodianReportsCard">
+            <div class="table-header-flex">
+              <h3>LAB DAMAGE REPORT HISTORY</h3>
+              <button class="btn btn-secondary btn-sm" id="btnCustSavePdf" type="button">SAVE PDF / EXPORT</button>
+            </div>
+            
+            <div class="table-scroll-wrap">
+              <table class="retro-table" id="custodianReportTable">
+                <thead>
+                  <tr>
+                    <th>PC STATUS</th>
+                    <th>ROOM No.</th>
+                    <th>PC No.</th>
+                    <th>FLAGGED ISSUES</th>
+                    <th>AFFECTED DEVICES</th>
+                    <th>TIMESTAMP</th>
+                    <th>STUDENT No.</th>
+                    <th>VIEW</th>
+                  </tr>
+                </thead>
+                <tbody id="custodianReportTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Custodian Room Management View -->
+          <div class="dash-table-card" id="custodianRoomsCard" style="display:none;">
+            <div class="table-header-flex">
+              <h3>TSU-CCS Lab Room Availability</h3>
+            </div>
+
+            <!-- Room Counters -->
+            <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:1.5rem;">
+              <div class="kpi-card card-cyan">
+                <div class="kpi-number" id="countRoomsAvail">7</div>
+                <div class="kpi-desc">Available Rooms</div>
+              </div>
+              <div class="kpi-card card-fixing">
+                <div class="kpi-number" id="countRoomsFixed">1</div>
+                <div class="kpi-desc">Being Fixed</div>
+              </div>
+              <div class="kpi-card card-purple">
+                <div class="kpi-number" id="countRoomsUpdating">1</div>
+                <div class="kpi-desc">Being Updated</div>
+              </div>
+            </div>
+
+            <div class="room-board" id="custRoomManagementGrid"></div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Instructor Inspection & Approval Modal -->
+  <div class="modal-overlay" id="instructorVerifyModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="verifyModalTitle">REPORT SUMMARY SHEET VERIFICATION</h3>
+        <button class="btn-close" id="btnCloseVerifyModal" type="button">&times;</button>
+      </div>
+      <div class="modal-content" id="verifyModalBody"></div>
+      <div class="summary-actions" style="margin-top:1.5rem; justify-content: flex-end;">
+        <button class="btn btn-secondary" id="btnDenyReport" style="color:var(--color-red);" type="button">DENY</button>
+        <button class="btn btn-primary" id="btnApproveReport" type="button">APPROVE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custodian Room Status Edit Modal -->
+  <div class="modal-overlay" id="editRoomStatusModal">
+    <div class="modal-window" style="max-width:560px;">
+      <div class="modal-header">
+        <h3 id="editRoomModalTitle">EDIT ROOM STATUS</h3>
+        <button class="btn-close" id="btnCloseRoomStatusModal" type="button">&times;</button>
+      </div>
+      <div class="modal-content" style="padding:1rem 0;">
+        <div class="room-edit-row">
+          <span class="room-edit-label">Room No.</span>
+          <span class="room-edit-value" id="editRoomNoText">C402</span>
+        </div>
+        <div class="room-edit-row">
+          <span class="room-edit-label">Status</span>
+          <span class="room-edit-value"><span id="currentRoomStatusText" data-status="Available">Available</span></span>
+        </div>
+        <div class="room-edit-row">
+          <span class="room-edit-label">Room Lock</span>
+          <span class="room-edit-value" id="roomLockLabelText">&#128275; UNLOCKED</span>
+        </div>
+        <div class="status-choice-grid">
+          <button type="button" class="btn btn-secondary btn-status-choice" data-status="Available">Available</button>
+          <button type="button" class="btn btn-secondary btn-status-choice" data-status="Being Fixed">Being Fixed</button>
+          <button type="button" class="btn btn-secondary btn-status-choice" data-status="Being Updated">Being Updated</button>
+        </div>
+        <p class="room-edit-note">The room is locked automatically while it is Being Fixed or Being Updated.</p>
+      </div>
+      <div class="summary-actions" style="margin-top:1rem; justify-content:flex-end;">
+        <button class="btn btn-primary" id="btnSaveRoomStatus" type="button">SAVE</button>
+        <button class="btn btn-secondary" id="btnCancelRoomStatus" type="button">BACK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Setting / Password Change Modal -->
+  <div class="modal-overlay" id="accountSettingModal">
+    <div class="modal-window" style="max-width:480px;">
+      <div class="modal-header">
+        <h3>ACCOUNT SETTING</h3>
+        <button class="btn-close" id="btnCloseAccountModal" type="button">&times;</button>
+      </div>
+      <div class="modal-content" style="padding:1rem 0;">
+        <form id="formChangePassword">
+          <div class="form-group" style="margin-bottom:1rem;">
+            <label for="currentPassword">Current Password</label>
+            <input type="password" id="currentPassword" required />
+          </div>
+          <div class="form-group" style="margin-bottom:1rem;">
+            <label for="newPassword">New Password</label>
+            <input type="password" id="newPassword" required />
+          </div>
+          <div class="form-group">
+            <label for="confirmNewPassword">Confirm New Password</label>
+            <input type="password" id="confirmNewPassword" required />
+          </div>
+          <div class="summary-actions" style="margin-top:1.5rem;">
+            <button class="btn btn-primary full-width" type="submit">UPDATE PASSWORD</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full Inspection Modal (Read-only View) -->
+  <div class="modal-overlay" id="reportDetailModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="modalTitle">Full Inspection Log</h3>
+        <button class="btn-close" id="btnCloseModal" type="button">&times;</button>
+      </div>
+      <div class="modal-content" id="modalBody"></div>
+      <div class="summary-actions" style="margin-top:1.5rem; justify-content: flex-end;">
+        <button class="btn btn-primary" id="btnDownloadReportPdf" type="button">DOWNLOAD PDF</button>
+        <button class="btn btn-danger" id="btnDeleteReport" type="button">DELETE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- In-Page Full Image Preview Modal -->
+  <div class="modal-overlay" id="imagePreviewModal" style="z-index: 700;">
+    <div class="modal-window image-modal-window">
+      <div class="modal-header">
+        <h3 style="color:var(--cyan-primary);">EVIDENCE IMAGE PREVIEW</h3>
+        <button class="btn-close" id="btnCloseImageModal" type="button">&times;</button>
+      </div>
+      <div class="image-modal-body">
+        <img id="enlargedPreviewImg" src="" alt="Captured Evidence Full" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase CDN SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <!-- EquiCheck custom pop-up (replaces the browser alert / confirm) -->
+  <div class="modal-overlay app-popup-overlay" id="appPopup">
+    <div class="modal-window app-popup app-popup-info" id="appPopupWindow" role="alertdialog" aria-modal="true" aria-labelledby="appPopupTitle">
+      <div class="app-popup-head">
+        <span class="app-popup-icon" id="appPopupIcon">i</span>
+        <h3 class="app-popup-title" id="appPopupTitle">INFO</h3>
+      </div>
+      <p class="app-popup-message" id="appPopupMessage"></p>
+      <div class="app-popup-actions">
+        <button type="button" class="btn btn-secondary" id="appPopupCancel">CANCEL</button>
+        <button type="button" class="btn btn-primary" id="appPopupOk">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF libraries (jsPDF + AutoTable) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="Backbone.js"></script>
+</body>
+</html>
