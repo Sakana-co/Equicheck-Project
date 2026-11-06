@@ -25,7 +25,6 @@ function runPopupQueue() {
   popupBusy = true;
   const p = popupQueue.shift();
   const type = POPUP_TYPES[p.type] ? p.type : 'info';
-
   const overlay = document.getElementById('appPopup');
   const win = document.getElementById('appPopupWindow');
   const okBtn = document.getElementById('appPopupOk');
@@ -35,7 +34,6 @@ function runPopupQueue() {
   document.getElementById('appPopupIcon').textContent = POPUP_TYPES[type].icon;
   document.getElementById('appPopupTitle').textContent = p.title || POPUP_TYPES[type].title;
   document.getElementById('appPopupMessage').textContent = p.message;
-
   okBtn.textContent = p.confirmText || 'OK';
   okBtn.className = p.danger ? 'btn btn-danger' : 'btn btn-primary';
   cancelBtn.textContent = p.cancelText || 'CANCEL';
@@ -50,6 +48,7 @@ function runPopupQueue() {
     p.resolve(result);
     runPopupQueue();
   };
+
   const onKey = (e) => {
     if (e.key === 'Escape') close(!p.isConfirm);
   };
@@ -57,21 +56,17 @@ function runPopupQueue() {
   okBtn.onclick = () => close(true);
   cancelBtn.onclick = () => close(false);
   document.addEventListener('keydown', onKey);
-
   overlay.classList.add('active');
   okBtn.focus();
 }
 
-// appAlert(message, { type: 'success' | 'error' | 'warning' | 'info', title })
 function appAlert(message, opts = {}) {
   return showAppPopup({ message, ...opts });
 }
 
-// appConfirm(message, { title, confirmText, cancelText, danger }) -> Promise<boolean>
 function appConfirm(message, opts = {}) {
   return showAppPopup({ message, isConfirm: true, type: 'warning', ...opts });
 }
-
 
 // 1. Firebase Configuration
 const firebaseConfig = {
@@ -87,7 +82,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// Compresses images to ~50-100KB so Firestore documents never hit the 1MB limit
 function compressImage(base64Str, maxWidth = 800, quality = 0.6) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -110,7 +104,7 @@ function compressImage(base64Str, maxWidth = 800, quality = 0.6) {
   });
 }
 
-// Laboratory configuration (from ver5.1 sketches)
+// Laboratory configuration
 const LAB_ROOMS = [
   { id: 'C401', name: 'C401', status: 'Available' },
   { id: 'C402', name: 'C402', status: 'Available' },
@@ -132,7 +126,6 @@ const PERIPHERALS = [
   { id: 'mousepad', name: 'Mousepad', iconKey: 'mousepad' }
 ];
 
-// Issue catalogs matched directly with the sketch evaluation cards
 const PERIPHERAL_ISSUES = {
   monitor: [
     'None',
@@ -190,6 +183,17 @@ const ICONS = {
 
 const state = {
   currentUserType: null,
+  // Cached authentication accounts synchronized with Firestore
+  auth: {
+    instructor: {
+      email: 'admin@tsu.edu.ph',
+      password: 'admin123'
+    },
+    custodian: {
+      email: 'custodian@tsu.edu.ph',
+      password: 'custodian123'
+    }
+  },
   studentDetails: {
     studentNo: '2024101234',
     studentName: 'Palad, Franzen R.',
@@ -250,7 +254,6 @@ const state = {
   ]
 };
 
-// Initialize room statuses from defaults
 LAB_ROOMS.forEach(r => { state.roomStatuses[r.id] = r.status; });
 
 const views = {
@@ -275,13 +278,17 @@ function navigateTo(viewId) {
   const target = views[viewId] || document.getElementById(viewId);
   if (target) target.classList.add('active');
   if (viewHistory[viewHistory.length - 1] !== viewId) viewHistory.push(viewId);
-
-  // Per sketch: Hide back button on Splash & main dashboards
+  
   const isTopLevel = (viewId === 'view-splash' || viewId === 'view-instructor-dashboard' || viewId === 'view-custodian-dashboard');
   navBackBtn.style.visibility = isTopLevel ? 'hidden' : 'visible';
 }
 
 function goBack() {
+  const instructorForm = document.getElementById('formInstructorLogin');
+  if (instructorForm) instructorForm.reset();
+  const custodianForm = document.getElementById('formCustodianLogin');
+  if (custodianForm) custodianForm.reset();
+
   if (viewHistory.length > 1) {
     viewHistory.pop();
     const prevView = viewHistory[viewHistory.length - 1];
@@ -292,13 +299,17 @@ function goBack() {
   }
 }
 
-// Fetch live records & room statuses from Cloud Firestore
+// Fetch live records, room statuses, and persistent accounts from Firestore
 async function loadReportsFromFirestore() {
   try {
     const snapshot = await db.collection('reports').get();
     if (!snapshot.empty) {
       const cloudRecords = [];
-      snapshot.forEach(doc => cloudRecords.push(doc.data()));
+      snapshot.forEach(doc => {
+        const item = doc.data();
+        item.id = doc.id;
+        cloudRecords.push(item);
+      });
       state.submittedRecords = cloudRecords;
       renderSeatsMatrix();
       if (typeof updateDashboardData === 'function') updateDashboardData();
@@ -320,6 +331,24 @@ async function loadReportsFromFirestore() {
     }
   } catch (err) {
     console.warn('Could not pull room statuses from Firestore:', err);
+  }
+
+  // Load persistent credentials from Cloud Firestore
+  try {
+    const accountsSnap = await db.collection('accounts').get();
+    if (!accountsSnap.empty) {
+      accountsSnap.forEach(doc => {
+        if (state.auth[doc.id]) {
+          state.auth[doc.id] = { ...state.auth[doc.id], ...doc.data() };
+        }
+      });
+    } else {
+      // First-time setup: initialize defaults in Firestore if collection is empty
+      await db.collection('accounts').doc('instructor').set(state.auth.instructor);
+      await db.collection('accounts').doc('custodian').set(state.auth.custodian);
+    }
+  } catch (err) {
+    console.warn('Could not sync accounts from Firestore:', err);
   }
 }
 
@@ -345,14 +374,15 @@ function initEventListeners() {
     document.getElementById('classSchedule').value = state.studentDetails.classSchedule;
     document.getElementById('instructorSelect').value = state.studentDetails.instructorName;
     navigateTo('view-evaluator-details');
-    
   });
-document.querySelectorAll('#starRatingContainer .star').forEach(star => {
+
+  document.querySelectorAll('#starRatingContainer .star').forEach(star => {
     star.addEventListener('click', () => {
       const val = parseInt(star.dataset.value);
       setStarRating(val);
     });
   });
+
   document.getElementById('btnGoInstructor').addEventListener('click', () => {
     state.currentUserType = 'instructor';
     navigateTo('view-instructor-login');
@@ -380,27 +410,28 @@ document.querySelectorAll('#starRatingContainer .star').forEach(star => {
   // Peripheral assessment
   document.getElementById('btnSavePeripheral').addEventListener('click', saveCurrentPeripheralEvaluation);
   document.getElementById('btnResetPeripheral').addEventListener('click', resetCurrentPeripheralForm);
-
   document.getElementById('btnFinishInspection').addEventListener('click', populateAndGoToSummary);
   document.getElementById('btnReviewAllFromForm').addEventListener('click', populateAndGoToSummary);
   document.getElementById('btnBackToHub').addEventListener('click', () => navigateTo('view-peripheral-selection'));
-
   document.getElementById('pledgeCheckbox').addEventListener('change', (e) => {
     document.getElementById('btnSubmitFinalReport').disabled = !e.target.checked;
   });
-
   document.getElementById('btnEditEvaluation').addEventListener('click', () => {
     navigateTo('view-evaluator-details');
   });
-
   document.getElementById('btnSubmitFinalReport').addEventListener('click', submitFinalReport);
 
-  // Instructor Login
+  // Instructor Login - STRICT AUTHENTICATION
   document.getElementById('formInstructorLogin').addEventListener('submit', (e) => {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    const pass = document.getElementById('loginPassword').value;
-    if ((email === 'admin@tsu.edu.ph' && pass === 'admin123') || (email && pass)) {
+    const emailInput = document.getElementById('loginEmail');
+    const passInput = document.getElementById('loginPassword');
+    const email = emailInput.value.trim();
+    const pass = passInput.value;
+
+    if (email === state.auth.instructor.email && pass === state.auth.instructor.password) {
+      emailInput.value = '';
+      passInput.value = '';
       updateDashboardData();
       navigateTo('view-instructor-dashboard');
     } else {
@@ -408,8 +439,14 @@ document.querySelectorAll('#starRatingContainer .star').forEach(star => {
     }
   });
 
-  document.getElementById('btnDashLogout').addEventListener('click', () => navigateTo('view-splash'));
+  document.getElementById('btnDashLogout').addEventListener('click', () => {
+    document.getElementById('formInstructorLogin').reset();
+    state.currentUserType = null;
+    navigateTo('view-splash');
+  });
+
   document.getElementById('btnDashAccount').addEventListener('click', () => {
+    document.getElementById('formChangePassword').reset();
     document.getElementById('accountSettingModal').classList.add('active');
   });
 
@@ -421,21 +458,32 @@ document.querySelectorAll('#starRatingContainer .star').forEach(star => {
     }
   });
 
-  // Custodian Login
+  // Custodian Login - STRICT AUTHENTICATION
   document.getElementById('formCustodianLogin').addEventListener('submit', (e) => {
     e.preventDefault();
-    const email = document.getElementById('custodianEmail').value;
-    const pass = document.getElementById('custodianPassword').value;
-    if ((email === 'custodian@tsu.edu.ph' && pass === 'custodian123') || (email && pass)) {
+    const emailInput = document.getElementById('custodianEmail');
+    const passInput = document.getElementById('custodianPassword');
+    const email = emailInput.value.trim();
+    const pass = passInput.value;
+
+    if (email === state.auth.custodian.email && pass === state.auth.custodian.password) {
+      emailInput.value = '';
+      passInput.value = '';
       updateCustodianDashboard();
-      
       navigateTo('view-custodian-dashboard');
     } else {
       appAlert('Invalid custodian credentials.', { type: 'error', title: 'LOGIN FAILED' });
     }
   });
-  document.getElementById('btnCustLogout').addEventListener('click', () => navigateTo('view-splash'));
+
+  document.getElementById('btnCustLogout').addEventListener('click', () => {
+    document.getElementById('formCustodianLogin').reset();
+    state.currentUserType = null;
+    navigateTo('view-splash');
+  });
+
   document.getElementById('btnCustAccount').addEventListener('click', () => {
+    document.getElementById('formChangePassword').reset();
     document.getElementById('accountSettingModal').classList.add('active');
   });
 
@@ -479,20 +527,50 @@ document.querySelectorAll('#starRatingContainer .star').forEach(star => {
     deleteViewedReport(currentViewedRecord);
   });
 
-  // Password Update Modal
+  // Password Update Modal - SYNCS DIRECTLY WITH FIRESTORE
   document.getElementById('btnCloseAccountModal').addEventListener('click', () => {
+    document.getElementById('formChangePassword').reset();
     document.getElementById('accountSettingModal').classList.remove('active');
   });
-  document.getElementById('formChangePassword').addEventListener('submit', (e) => {
+
+  document.getElementById('formChangePassword').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const currentPass = document.getElementById('currentPassword').value;
     const np = document.getElementById('newPassword').value;
     const cnp = document.getElementById('confirmNewPassword').value;
+
+    const activeRole = state.currentUserType === 'custodian' ? 'custodian' : 'instructor';
+
+    if (currentPass !== state.auth[activeRole].password) {
+      appAlert('Incorrect current password.', { type: 'error', title: 'AUTHENTICATION FAILED' });
+      return;
+    }
+
     if (np !== cnp) {
       appAlert('New passwords do not match.', { type: 'error', title: 'PASSWORD ERROR' });
       return;
     }
-    appAlert('Password updated successfully!', { type: 'success', title: 'PASSWORD UPDATED' });
-    document.getElementById('accountSettingModal').classList.remove('active');
+
+    if (np.length < 6) {
+      appAlert('Password must be at least 6 characters long.', { type: 'warning', title: 'PASSWORD TOO SHORT' });
+      return;
+    }
+
+    try {
+      // Save permanently to Firestore 'accounts' collection
+      await db.collection('accounts').doc(activeRole).set(
+        { password: np },
+        { merge: true }
+      );
+
+      state.auth[activeRole].password = np;
+      appAlert(`Password for ${activeRole.toUpperCase()} updated and saved to cloud!`, { type: 'success', title: 'PASSWORD UPDATED' });
+      document.getElementById('formChangePassword').reset();
+      document.getElementById('accountSettingModal').classList.remove('active');
+    } catch (err) {
+      console.error('Failed to update password in Firestore:', err);
+      appAlert('Failed to save updated password: ' + err.message, { type: 'error', title: 'UPDATE FAILED' });
+    }
   });
 
   // Modals close buttons
@@ -580,8 +658,6 @@ function resetEvaluationsData() {
   });
 }
 
-// ----- Room helpers (shared by student + custodian views) -----
-// A room is locked automatically whenever it is Being Fixed or Being Updated.
 function getRoomStatus(room) {
   return state.roomStatuses[room.id] || room.status;
 }
@@ -601,15 +677,12 @@ function splitRoomName(name) {
   return { code: m ? m[1] : name, sub: m && m[2] ? m[2] : '' };
 }
 
-// One tile = outlined box (coloured by status) with the room code below it
 function buildRoomTile(room, mode) {
   const status = getRoomStatus(room);
   const locked = isRoomLocked(room);
   const { code, sub } = splitRoomName(room.name);
-
   const tile = document.createElement('div');
   tile.className = `room-tile ${roomStatusClass(status)}${mode === 'student' && locked ? ' room-student-locked' : ''}`;
-
   let lockLabel = '';
   if (mode === 'custodian') {
     lockLabel = locked
@@ -618,7 +691,6 @@ function buildRoomTile(room, mode) {
   } else if (locked) {
     lockLabel = '<span class="room-lock-label is-locked">&#128274; LOCKED</span>';
   }
-
   tile.innerHTML = `
     <div class="room-box">
       <span class="room-box-status">${status}</span>
@@ -630,7 +702,6 @@ function buildRoomTile(room, mode) {
   return tile;
 }
 
-// Rooms are shown in two rows like the sketch: 5 on top, 4 below
 function fillRoomBoard(board, mode, onClick) {
   board.innerHTML = '';
   [LAB_ROOMS.slice(0, 5), LAB_ROOMS.slice(5)].forEach(rowRooms => {
@@ -645,11 +716,9 @@ function fillRoomBoard(board, mode, onClick) {
   });
 }
 
-// Render Lab Rooms with Color-Coded Statuses (student)
 function renderRooms() {
   const board = document.getElementById('roomGridContainer');
   if (!board) return;
-
   fillRoomBoard(board, 'student', (room) => {
     if (isRoomLocked(room)) {
       appAlert(`Room ${splitRoomName(room.name).code} is locked (${getRoomStatus(room)}). Please choose another room.`, { type: 'warning', title: 'ROOM LOCKED' });
@@ -662,14 +731,11 @@ function renderRooms() {
   });
 }
 
-// Render 32 PCs matching the exact sketch:
-// Left Col: 4 PCs | Center: 3 rows of 8 PCs (24 total) | Right Col: 4 PCs
 function renderSeatsMatrix() {
   const leftCol = document.getElementById('seatsLeftCol');
   const centerGrid = document.getElementById('seatsCenterGrid');
   const rightCol = document.getElementById('seatsRightCol');
   if (!leftCol || !centerGrid || !rightCol) return;
-
   leftCol.innerHTML = '';
   centerGrid.innerHTML = '';
   rightCol.innerHTML = '';
@@ -679,17 +745,14 @@ function renderSeatsMatrix() {
     seatBtn.type = 'button';
     seatBtn.className = 'seat-btn';
     seatBtn.innerText = i < 10 ? `0${i}` : `${i}`;
-
     const existing = state.submittedRecords.find(
       r => r.room === state.selectedRoom && Number(r.pcNo) === i
     );
-
     if (existing) {
       if (existing.status === 'unusable') seatBtn.classList.add('status-unusable');
       else if (existing.status === 'semi') seatBtn.classList.add('status-semi');
       else if (existing.status === 'functional') seatBtn.classList.add('status-functional');
     }
-
     seatBtn.addEventListener('click', () => {
       state.selectedPc = i;
       resetEvaluationsData();
@@ -711,12 +774,10 @@ function renderSeatsMatrix() {
   }
 }
 
-// Render Peripherals Grid
 function renderPeripheralsHub() {
   const hub = document.getElementById('peripheralsHubGrid');
   if (!hub) return;
   hub.innerHTML = '';
-
   PERIPHERALS.forEach(item => {
     const evalData = state.currentPcEvaluations[item.id];
     const box = document.createElement('div');
@@ -735,26 +796,20 @@ function openConditionFormForPeripheral(peripheralId) {
   state.activePeripheralId = peripheralId;
   const pConfig = PERIPHERALS.find(p => p.id === peripheralId);
   const data = state.currentPcEvaluations[peripheralId];
-
   document.getElementById('evalCurrentPcBadge').innerText = `PC #${state.selectedPc < 10 ? '0' : ''}${state.selectedPc}`;
   document.getElementById('evalCurrentPeripheralName').innerText = pConfig.name.toUpperCase();
   document.getElementById('evalIconPreview').innerHTML = ICONS[pConfig.iconKey];
-
   const radio = document.querySelector(`input[name="availability"][value="${data.availability}"]`);
   if (radio) radio.checked = true;
-
   setStarRating(data.conditionRating || 5);
-
   const issuesListContainer = document.getElementById('issuesChecklistContainer');
   issuesListContainer.innerHTML = '';
-
   (PERIPHERAL_ISSUES[peripheralId] || []).forEach(issue => {
     const lbl = document.createElement('label');
     const checked = data.issues.includes(issue) ? 'checked' : '';
     lbl.innerHTML = `<input type="checkbox" value="${issue}" ${checked}> ${issue}`;
     issuesListContainer.appendChild(lbl);
   });
-
   issuesListContainer.querySelectorAll('input').forEach(chk => {
     chk.addEventListener('change', (e) => {
       if (e.target.value === 'None' && e.target.checked) {
@@ -767,13 +822,10 @@ function openConditionFormForPeripheral(peripheralId) {
       }
     });
   });
-
   document.getElementById('customIssueInput').value = data.customIssue || '';
-
   const photoPreviewImg = document.getElementById('photoPreviewImg');
   const photoPreviewContainer = document.getElementById('photoPreviewContainer');
   const btnRemovePhoto = document.getElementById('btnRemovePhoto');
-
   if (photoPreviewContainer && btnRemovePhoto && photoPreviewImg) {
     if (data.photo) {
       photoPreviewImg.src = data.photo;
@@ -785,12 +837,10 @@ function openConditionFormForPeripheral(peripheralId) {
       btnRemovePhoto.style.display = 'none';
     }
   }
-
   const overviewTitle = document.getElementById('overviewHeaderTitle');
   if (overviewTitle) {
     overviewTitle.innerText = `PC #${state.selectedPc < 10 ? '0' : ''}${state.selectedPc} Evaluation Overview`;
   }
-
   renderInlineOverviewTable();
   navigateTo('view-condition-form');
 }
@@ -812,16 +862,15 @@ function setStarRating(rating) {
   const lbl = document.getElementById('ratingLabel');
   if (lbl) lbl.innerText = ratingDesc[rating] || `${rating} / 5`;
 }
+
 function saveCurrentPeripheralEvaluation() {
   const selectedAvail = document.querySelector('input[name="availability"]:checked')?.value || 'Yes';
   const checkedBoxes = Array.from(document.querySelectorAll('#issuesChecklistContainer input:checked')).map(c => c.value);
   const custom = document.getElementById('customIssueInput').value.trim();
-
   const photoPreviewImg = document.getElementById('photoPreviewImg');
   const capturedPhoto = (photoPreviewImg && photoPreviewImg.src.startsWith('data:image')) 
     ? photoPreviewImg.src 
     : null;
-
   state.currentPcEvaluations[state.activePeripheralId] = {
     availability: selectedAvail,
     conditionRating: selectedAvail === 'Yes' ? state.currentRating : null,
@@ -830,7 +879,6 @@ function saveCurrentPeripheralEvaluation() {
     photo: capturedPhoto,
     isCompleted: true
   };
-
   renderInlineOverviewTable();
   renderPeripheralsHub();
   appAlert(`${PERIPHERALS.find(p => p.id === state.activePeripheralId).name} assessment saved!`, { type: 'success', title: 'ASSESSMENT SAVED' });
@@ -845,40 +893,32 @@ function resetCurrentPeripheralForm() {
     photo: null,
     isCompleted: false
   };
-
   const cameraInput = document.getElementById('cameraInput');
   const photoPreviewImg = document.getElementById('photoPreviewImg');
   const photoPreviewContainer = document.getElementById('photoPreviewContainer');
   const btnRemovePhoto = document.getElementById('btnRemovePhoto');
-
   if (cameraInput) cameraInput.value = '';
   if (photoPreviewImg) photoPreviewImg.src = '';
   if (photoPreviewContainer) photoPreviewContainer.style.display = 'none';
   if (btnRemovePhoto) btnRemovePhoto.style.display = 'none';
-
   openConditionFormForPeripheral(state.activePeripheralId);
 }
 
-// Side Table with Image Evidence Column
 function renderInlineOverviewTable() {
   const tbody = document.getElementById('inlineOverviewTableBody');
   tbody.innerHTML = '';
-
   PERIPHERALS.forEach(p => {
     const item = state.currentPcEvaluations[p.id];
     const tr = document.createElement('tr');
     let issuesStr = item.issues.filter(i => i !== 'None').join(', ');
     if (item.customIssue) issuesStr += (issuesStr ? `, ` : '') + item.customIssue;
     if (!issuesStr) issuesStr = item.isCompleted ? 'None' : '-';
-
     const isPresent = item.availability === 'Yes';
     const conditionText = isPresent ? (item.isCompleted ? `${item.conditionRating} ★` : '-') : '';
     const issuesText = isPresent ? issuesStr : '';
-
     const photoHtml = item.photo
       ? `<img src="${item.photo}" class="modal-photo-thumb" style="width:36px; height:28px;" />`
       : `<span style="color:var(--text-muted);">-</span>`;
-
     tr.innerHTML = `
       <td title="Click to edit" style="cursor:pointer;" class="clickable-row">
         <span class="table-icon-mini">${ICONS[p.iconKey]}</span> ${p.name}
@@ -898,18 +938,15 @@ function renderInlineOverviewTable() {
 function populateAndGoToSummary() {
   const tbody = document.getElementById('finalSummaryTableBody');
   tbody.innerHTML = '';
-
   PERIPHERALS.forEach(p => {
     const item = state.currentPcEvaluations[p.id];
     const isPresent = item.availability === 'Yes';
     let issuesStr = item.issues.filter(i => i !== 'None').join(', ');
     if (item.customIssue) issuesStr += (issuesStr ? `, ` : '') + item.customIssue;
     if (!issuesStr) issuesStr = 'None';
-
     const photoHtml = item.photo
       ? `<img src="${item.photo}" class="modal-photo-thumb" style="width:40px; height:30px;" />`
       : `<span style="color:var(--text-muted);">-</span>`;
-
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="table-icon-mini">${ICONS[p.iconKey]}</span> ${p.name}</td>
@@ -920,7 +957,6 @@ function populateAndGoToSummary() {
     `;
     tbody.appendChild(tr);
   });
-
   document.getElementById('summaryMetaDisplay').innerHTML = `
     <div><strong>Student Number:</strong> ${state.studentDetails.studentNo}</div>
     <div><strong>Student Name:</strong> ${state.studentDetails.studentName}</div>
@@ -935,24 +971,20 @@ function populateAndGoToSummary() {
   navigateTo('view-report-summary');
 }
 
-// Submit Final Report to Firestore
 async function submitFinalReport() {
   const submitBtn = document.getElementById('btnSubmitFinalReport');
   if (submitBtn) {
     submitBtn.disabled = true;
     submitBtn.innerText = 'SAVING TO CLOUD...';
   }
-
   let redFlag = false;
   let yellowFlag = false;
   let flaggedIssuesList = [];
   let affectedList = [];
-
   PERIPHERALS.forEach(p => {
     const item = state.currentPcEvaluations[p.id];
     const hasIssues = item.issues.some(i => i !== 'None') || Boolean(item.customIssue);
     const isMissing = item.availability !== 'Yes';
-
     if (item.conditionRating <= 2 || (isMissing && ['monitor', 'system_unit'].includes(p.id))) {
       redFlag = true;
       affectedList.push(p.name);
@@ -960,17 +992,14 @@ async function submitFinalReport() {
       yellowFlag = true;
       affectedList.push(p.name);
     }
-
     if (hasIssues) {
       flaggedIssuesList.push(...item.issues.filter(i => i !== 'None'));
       if (item.customIssue) flaggedIssuesList.push(item.customIssue);
     }
   });
-
   const finalStatus = redFlag ? 'unusable' : (yellowFlag ? 'semi' : 'functional');
   const now = new Date();
   const timeFormatted = `${now.toLocaleDateString()}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
   const newRecord = {
     id: `REC-${Date.now().toString().slice(-4)}`,
     room: state.selectedRoom,
@@ -985,7 +1014,6 @@ async function submitFinalReport() {
     section: state.studentDetails.section,
     evaluations: JSON.parse(JSON.stringify(state.currentPcEvaluations))
   };
-
   try {
     await db.collection('reports').doc(newRecord.id).set(newRecord);
     state.submittedRecords.unshift(newRecord);
@@ -1004,36 +1032,34 @@ async function submitFinalReport() {
 
 // INSTRUCTOR MODULE: Verification & Approval
 let currentInspectedRecord = null;
-
 async function updateDashboardData(sectionFilter = 'ALL') {
   try {
     const snapshot = await db.collection('reports').get();
     if (!snapshot.empty) {
       const cloudRecords = [];
-      snapshot.forEach(doc => cloudRecords.push(doc.data()));
+      snapshot.forEach(doc => {
+        const item = doc.data();
+        item.id = doc.id;
+        cloudRecords.push(item);
+      });
       state.submittedRecords = cloudRecords;
     }
   } catch (err) {
     console.warn('Could not sync reports from Firestore:', err);
   }
-
   const filtered = sectionFilter === 'ALL'
     ? state.submittedRecords
     : state.submittedRecords.filter(r => r.section === sectionFilter);
-
   const tbody = document.getElementById('instructorReportTableBody');
   tbody.innerHTML = '';
-
   if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No logs registered for section ${sectionFilter}.</td></tr>`;
     return;
   }
-
   filtered.forEach(rec => {
     const tr = document.createElement('tr');
     const vStatus = rec.verificationStatus || 'Pending';
     const vColor = vStatus === 'Approved' ? 'var(--color-green)' : (vStatus === 'Denied' ? 'var(--color-red)' : 'var(--color-yellow)');
-
     tr.innerHTML = `
       <td><span class="badge-status ${rec.status === 'unusable' ? 'red' : (rec.status === 'semi' ? 'yellow' : 'green')}">${rec.status.toUpperCase()}</span></td>
       <td>${rec.room}</td>
@@ -1042,11 +1068,9 @@ async function updateDashboardData(sectionFilter = 'ALL') {
       <td><button class="btn btn-secondary btn-sm btn-verify-report" data-id="${rec.id}">VIEW</button></td>
       <td style="color:${vColor}; font-weight:bold;">${vStatus}</td>
     `;
-
     tr.querySelector('.btn-verify-report').addEventListener('click', () => {
       openInstructorVerificationModal(rec);
     });
-
     tbody.appendChild(tr);
   });
 }
@@ -1060,9 +1084,7 @@ function openInstructorVerificationModal(record) {
   const modal = document.getElementById('instructorVerifyModal');
   const title = document.getElementById('verifyModalTitle');
   const body = document.getElementById('verifyModalBody');
-
   title.innerText = `REPORT SUMMARY SHEET: Room ${record.room} - PC #${record.pcNo}`;
-
   let evalRows = '';
   if (record.evaluations) {
     Object.keys(record.evaluations).forEach(k => {
@@ -1071,7 +1093,6 @@ function openInstructorVerificationModal(record) {
       const photoHtml = e.photo
         ? `<img src="${e.photo}" class="modal-photo-thumb" data-photo="${e.photo}" title="Click to enlarge" />`
         : '-';
-
       evalRows += `
         <tr>
           <td><strong>${pName}</strong></td>
@@ -1083,7 +1104,6 @@ function openInstructorVerificationModal(record) {
       `;
     });
   }
-
   body.innerHTML = `
     <div style="margin-bottom:1rem; font-size:0.9rem; line-height:1.6;">
       <div><strong>Student Name:</strong> ${record.studentName} (${record.studentNo})</div>
@@ -1099,7 +1119,6 @@ function openInstructorVerificationModal(record) {
       </tbody>
     </table>
   `;
-
   modal.querySelectorAll('.modal-photo-thumb').forEach(thumb => {
     thumb.addEventListener('click', () => {
       const targetImg = document.getElementById('enlargedPreviewImg');
@@ -1109,11 +1128,9 @@ function openInstructorVerificationModal(record) {
       }
     });
   });
-
   modal.classList.add('active');
 }
 
-// Approve / Deny Report handlers
 document.getElementById('btnApproveReport').addEventListener('click', async () => {
   if (!currentInspectedRecord) return;
   await setReportVerification(currentInspectedRecord.id, 'Approved');
@@ -1141,29 +1158,23 @@ async function setReportVerification(recId, newStatus) {
 
 // PROPERTY CUSTODIAN MODULE
 async function updateCustodianDashboard(roomFilter = 'ALL') {
-  // Custodian only sees reports that the instructor has APPROVED
   const approvedOnly = state.submittedRecords.filter(r => r.verificationStatus === 'Approved');
   const filtered = roomFilter === 'ALL'
     ? approvedOnly
     : approvedOnly.filter(r => r.room === roomFilter);
-
   const unusableCount = filtered.filter(r => r.status === 'unusable').length;
   const semiCount = filtered.filter(r => r.status === 'semi').length;
   const functionalCount = filtered.filter(r => r.status === 'functional').length;
-
   document.getElementById('custCountUnusable').innerText = unusableCount;
   document.getElementById('custCountSemi').innerText = semiCount;
   document.getElementById('custCountFunctional').innerText = functionalCount;
   document.getElementById('custCountTotal').innerText = filtered.length;
-
   const tbody = document.getElementById('custodianReportTableBody');
   tbody.innerHTML = '';
-
   if (filtered.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:1.5rem; color:var(--text-muted);">No approved reports logged for room ${roomFilter}.</td></tr>`;
     return;
   }
-
   filtered.forEach(rec => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -1187,14 +1198,12 @@ function filterCustodianByRoom(room) {
   updateCustodianDashboard(room);
 }
 
-// Custodian Manage Lab Room Availability
 let activeEditingRoomId = null;
-let pendingRoomStatus = 'Available'; // status currently chosen inside the edit window
+let pendingRoomStatus = 'Available';
 
 function renderCustodianRoomManagement() {
   const board = document.getElementById('custRoomManagementGrid');
   if (!board) return;
-
   let avail = 0, fixed = 0, update = 0;
   LAB_ROOMS.forEach(room => {
     const status = getRoomStatus(room);
@@ -1202,9 +1211,7 @@ function renderCustodianRoomManagement() {
     else if (status === 'Being Fixed') fixed++;
     else if (status === 'Being Updated') update++;
   });
-
   fillRoomBoard(board, 'custodian', openRoomEditModal);
-
   document.getElementById('countRoomsAvail').innerText = avail;
   document.getElementById('countRoomsFixed').innerText = fixed;
   document.getElementById('countRoomsUpdating').innerText = update;
@@ -1218,15 +1225,12 @@ function openRoomEditModal(room) {
   document.getElementById('editRoomStatusModal').classList.add('active');
 }
 
-// Status text follows the button that was clicked; that button becomes unclickable
 function refreshRoomEditModal() {
   const statusText = document.getElementById('currentRoomStatusText');
   statusText.innerText = pendingRoomStatus;
   statusText.dataset.status = pendingRoomStatus;
-
   document.getElementById('roomLockLabelText').innerHTML =
     pendingRoomStatus === 'Available' ? '&#128275; UNLOCKED' : '&#128274; LOCKED';
-
   document.querySelectorAll('.btn-status-choice').forEach(btn => {
     btn.disabled = btn.dataset.status === pendingRoomStatus;
   });
@@ -1242,8 +1246,7 @@ document.querySelectorAll('.btn-status-choice').forEach(btn => {
 document.getElementById('btnSaveRoomStatus').addEventListener('click', async () => {
   if (!activeEditingRoomId) return;
   const chosen = pendingRoomStatus;
-  const locked = chosen !== 'Available'; // auto-lock
-
+  const locked = chosen !== 'Available';
   try {
     await db.collection('room_statuses').doc(activeEditingRoomId).set(
       { status: chosen, locked },
@@ -1259,16 +1262,13 @@ document.getElementById('btnSaveRoomStatus').addEventListener('click', async () 
   }
 });
 
-// Read-only modal
 let currentViewedRecord = null;
-
 function openReportDetailsModal(record) {
   currentViewedRecord = record;
   const modal = document.getElementById('reportDetailModal');
   const title = document.getElementById('modalTitle');
   const body = document.getElementById('modalBody');
   title.innerText = `Full Inspection Log: ${record.room} - PC #${record.pcNo}`;
-
   let evalRows = '';
   if (record.evaluations) {
     Object.keys(record.evaluations).forEach(k => {
@@ -1277,7 +1277,6 @@ function openReportDetailsModal(record) {
       const photoHtml = e.photo
         ? `<img src="${e.photo}" class="modal-photo-thumb" data-photo="${e.photo}" title="Click to enlarge"/>`
         : '<span style="color:var(--text-muted);">-</span>';
-
       evalRows += `
         <tr>
           <td><strong>${pName}</strong></td>
@@ -1289,7 +1288,6 @@ function openReportDetailsModal(record) {
       `;
     });
   }
-
   body.innerHTML = `
     <div style="margin-bottom:1rem; font-size:0.9rem; line-height:1.6;">
       <div><strong>Evaluator:</strong> ${record.studentName} (${record.studentNo})</div>
@@ -1305,7 +1303,6 @@ function openReportDetailsModal(record) {
       </tbody>
     </table>
   `;
-
   modal.querySelectorAll('.modal-photo-thumb').forEach(thumb => {
     thumb.addEventListener('click', () => {
       const targetImg = document.getElementById('enlargedPreviewImg');
@@ -1315,30 +1312,24 @@ function openReportDetailsModal(record) {
       }
     });
   });
-
   modal.classList.add('active');
 }
 
-
-// Delete the report that is open in the custodian's VIEW modal
 async function deleteViewedReport(record) {
   if (!record) {
     appAlert('Please open a report first.', { type: 'info', title: 'NO REPORT OPEN' });
     return;
   }
-
   const ok = await appConfirm(
     `Room ${record.room} - PC #${record.pcNo}\nStudent No.: ${record.studentNo || '-'}\n\nThis cannot be undone.`,
     { title: 'DELETE THIS REPORT?', confirmText: 'DELETE', cancelText: 'CANCEL', danger: true }
   );
   if (!ok) return;
-
   try {
     await db.collection('reports').doc(record.id).delete();
     state.submittedRecords = state.submittedRecords.filter(r => r.id !== record.id);
     currentViewedRecord = null;
     document.getElementById('reportDetailModal').classList.remove('active');
-
     const activeRoom = document.querySelector('#custodianRoomFilterList li.active')?.dataset.room || 'ALL';
     updateCustodianDashboard(activeRoom);
     appAlert('The report was deleted.', { type: 'success', title: 'REPORT DELETED' });
@@ -1347,9 +1338,8 @@ async function deleteViewedReport(record) {
   }
 }
 
-// ----- PDF helpers -----
+// PDF Generation
 const PDF_MARGIN = 40;
-
 function pdfLibReady() {
   if (!window.jspdf || !window.jspdf.jsPDF) {
     appAlert('PDF library did not load. Please check your internet connection and reload the page.', { type: 'error', title: 'PDF NOT READY' });
@@ -1362,12 +1352,9 @@ function pdfStatusColor(status) {
   return status === 'unusable' ? [200, 30, 30] : (status === 'semi' ? [190, 130, 0] : [20, 130, 50]);
 }
 
-// Draws ONE report (header, details, equipment table with photos) starting at the top of the current page
 function drawReportOnPdf(doc, record) {
   const pageW = doc.internal.pageSize.getWidth();
   const margin = PDF_MARGIN;
-
-  // ----- Header -----
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
@@ -1380,7 +1367,6 @@ function drawReportOnPdf(doc, record) {
   doc.setDrawColor(150);
   doc.line(margin, 92, pageW - margin, 92);
 
-  // ----- Report details -----
   const details = [
     ['Student Name', record.studentName || '-'],
     ['Student No.', record.studentNo || '-'],
@@ -1389,7 +1375,6 @@ function drawReportOnPdf(doc, record) {
     ['Date & Time', record.timestamp || '-'],
     ['Verification', record.verificationStatus || 'Pending']
   ];
-
   let y = 112;
   doc.setFontSize(10);
   details.forEach(([label, value]) => {
@@ -1399,14 +1384,12 @@ function drawReportOnPdf(doc, record) {
     doc.text(String(value), margin + 95, y);
     y += 16;
   });
-
   doc.setFont('helvetica', 'bold');
   doc.text('PC Status:', margin, y);
   doc.setTextColor(...pdfStatusColor(record.status));
   doc.text((record.status || '').toUpperCase(), margin + 95, y);
   doc.setTextColor(0, 0, 0);
   y += 14;
-
   if (record.issuesSummary && record.issuesSummary !== 'None') {
     doc.setFont('helvetica', 'bold');
     doc.text('Flagged Issues:', margin, y + 4);
@@ -1415,9 +1398,8 @@ function drawReportOnPdf(doc, record) {
     y += 20;
   }
 
-  // ----- Equipment table -----
   const body = [];
-  const evidence = []; // { name, photo }
+  const evidence = [];
   PERIPHERALS.forEach(p => {
     const e = record.evaluations && record.evaluations[p.id];
     if (!e) return;
@@ -1425,7 +1407,6 @@ function drawReportOnPdf(doc, record) {
     const issueList = (e.issues || []).filter(i => i !== 'None');
     if (e.customIssue) issueList.push(e.customIssue);
     const issuesStr = present ? (issueList.length ? issueList.join(', ') : 'None') : 'Missing / Not provided';
-
     body.push([
       p.name,
       e.availability,
@@ -1434,11 +1415,9 @@ function drawReportOnPdf(doc, record) {
     ]);
     if (e.photo) evidence.push({ name: p.name, photo: e.photo });
   });
-
   if (body.length === 0) {
     body.push([{ content: 'No peripheral breakdown available for this report.', colSpan: 4, styles: { halign: 'center' } }]);
   }
-
   doc.autoTable({
     startY: y + 8,
     head: [['Equipment', 'Availability', 'Condition', 'Issue(s) Raised']],
@@ -1455,13 +1434,11 @@ function drawReportOnPdf(doc, record) {
     }
   });
 
-  // ----- Image evidence: large photos so they are easy to read -----
   if (evidence.length > 0) {
     const pageH = doc.internal.pageSize.getHeight();
-    const maxW = pageW - margin * 2;   // full content width
-    const maxH = 330;                  // tall enough to stay sharp, ~2 photos per page
+    const maxW = pageW - margin * 2;
+    const maxH = 330;
     let yy = doc.lastAutoTable.finalY + 26;
-
     const heading = (yPos) => {
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
@@ -1470,30 +1447,24 @@ function drawReportOnPdf(doc, record) {
       doc.setDrawColor(150);
       doc.line(margin, yPos + 4, pageW - margin, yPos + 4);
     };
-
     if (yy + 40 > pageH - 50) { doc.addPage(); yy = 50; }
     heading(yy);
     yy += 22;
-
     evidence.forEach(item => {
       try {
         const props = doc.getImageProperties(item.photo);
         const ratio = Math.min(maxW / props.width, maxH / props.height);
         const w = props.width * ratio;
         const h = props.height * ratio;
-
-        // new page if the label + photo does not fit
         if (yy + 16 + h > pageH - 50) {
           doc.addPage();
           yy = 50;
         }
-
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
         doc.text(item.name, margin, yy);
         yy += 8;
-
         const fmt = item.photo.startsWith('data:image/png') ? 'PNG' : 'JPEG';
         doc.setDrawColor(150);
         doc.rect(margin, yy, w, h);
@@ -1506,7 +1477,6 @@ function drawReportOnPdf(doc, record) {
   }
 }
 
-// Adds "Generated on" + page numbers to every page, then downloads the file
 function finishAndSavePdf(doc, filename) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -1525,45 +1495,35 @@ function finishAndSavePdf(doc, filename) {
 
 const pdfSafe = (v) => String(v || '').replace(/[^a-z0-9_-]/gi, '');
 
-// Download the single report currently open in the custodian's VIEW modal as a PDF
 function downloadReportPdf(record) {
   if (!record) {
     appAlert('Please open a report first.', { type: 'info', title: 'NO REPORT OPEN' });
     return;
   }
   if (!pdfLibReady()) return;
-
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
   drawReportOnPdf(doc, record);
   finishAndSavePdf(doc, `Report_${pdfSafe(record.room)}_PC${pdfSafe(record.pcNo)}_${pdfSafe(record.studentNo)}.pdf`);
 }
 
-// SAVE PDF / EXPORT: every approved report of the selected room (or all rooms) in ONE pdf file,
-// each report looks exactly like the single-report PDF
 function exportReportsToPdf() {
   if (!pdfLibReady()) return;
-
   const roomFilter = document.querySelector('#custodianRoomFilterList li.active')?.dataset.room || 'ALL';
   const reports = state.submittedRecords.filter(r =>
     r.verificationStatus === 'Approved' && (roomFilter === 'ALL' || r.room === roomFilter)
   );
-
   if (reports.length === 0) {
     appAlert(roomFilter === 'ALL' ? 'There are no approved reports to export.' : `There are no approved reports for room ${roomFilter}.`, { type: 'info', title: 'NOTHING TO EXPORT' });
     return;
   }
-
-  // Same content and layout as the single-report PDF, one report after another
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
   reports.forEach((record, i) => {
     if (i > 0) doc.addPage();
     drawReportOnPdf(doc, record);
   });
-
   finishAndSavePdf(doc, `EquiCheck_Reports_${roomFilter === 'ALL' ? 'AllRooms' : pdfSafe(roomFilter)}_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
-// Export logs
 function exportReportsToJson() {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.submittedRecords, null, 2));
   const downloadAnchor = document.createElement('a');
